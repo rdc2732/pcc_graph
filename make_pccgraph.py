@@ -17,8 +17,16 @@
 
 import sys
 import os
+import xlrd
+from xlrd.sheet import ctype_text
+import xlwt
 
 keyword_files = ['Load 5.0 FMM Output Report.txt','Placeholder List.txt']
+signal_file = 'master_signals.xls'
+signal_file_out = 'master_signals_out.xls'
+params_file = 'master_params.xls'
+params_file_out = 'master_params_out.xls'
+
 fm_keywords = []
 fm_set_flag = False
 fm_set_string = 'FM SELECTION (SET)'
@@ -45,7 +53,64 @@ for keyword_file_name in keyword_files:
         if fm_set_flag:
             fm_keywords.append(line)
 
+book = xlrd.open_workbook(signal_file)
+sheet = book.sheet_by_name('HAM Signal')
+nrows = sheet.nrows
+ncols = sheet.ncols
 
 
+cell_types = {}
+for idx, cell_obj in enumerate(sheet.row(1)):
+    cell_types[idx] = (cell_obj.ctype)
 
+
+signals_sheet = [] # An arrary of all signals filtered for fm_keywords
+signals_sheet_new = [] # An arrary of all signals remaining after flattenging
+llr_signals = {} # A dictionary of rows each signal exists in { signal: [llr_rows]}
+
+# Read spreadsheet and keep rows that have legit FM keywords, capture defines in dictionary llr_signals
+new_row = 0
+header = sheet.row_values(0)
+for row in range(1,nrows):
+    fm_keyword = sheet.cell(row,1).value
+    llr_signal = sheet.cell(row,0).value
+    if fm_keyword in fm_keywords:
+        signals_sheet.append(sheet.row_values(row))
+        if llr_signal in llr_signals:
+            llr_signals[llr_signal].append(new_row)
+        else:
+            llr_signals[llr_signal] = [new_row]
+        new_row += 1
+
+# For every llr_signal, look for pairs.  If one source is Input, combine rows.  Write to new list
+for key in llr_signals:
+    rows = llr_signals[key]
+    row_data = {} # Dictionary for each of the rows being flattened
+    if len(rows) == 2:  # Assumes there will only be two rows to be compressed.
+        for idx, rownum in enumerate(rows):
+            row_data[idx] = signals_sheet[rownum]
+        if row_data[0][2].find('Input') > -1:
+            new_data = row_data[0]          # Target data exists in row_data[0], defined is in row_data[1]
+            new_data[2] = row_data[1][2]
+        else:
+            new_data = row_data[1]          # Target data exists in row_data[1], defined is in row_data[0]
+            new_data[2] = row_data[0][2]
+    elif len(rows) == 1:
+        new_data = signals_sheet[rows[0]] # Target data exists in row_data[0], only row for this signal
+    else:
+        print(key, len(rows), "ERROR") # Every signal should exist in only one or two rows.
+    signals_sheet.append(new_data)
+
+# Write new Excel workbook for signals
+book2 = xlwt.Workbook()
+sheet1 = book2.add_sheet('HAM Signal')
+
+for col, heading in enumerate(header):
+    sheet1.write(0, col, heading)
+
+for row, data in enumerate(signals_sheet):
+    for col, cell in enumerate(data):
+        sheet1.write(row + 1, col, cell)
+
+book2.save(signal_file_out)
 
