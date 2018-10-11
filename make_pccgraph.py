@@ -58,17 +58,10 @@ sheet = book.sheet_by_name('HAM Signal')
 nrows = sheet.nrows
 ncols = sheet.ncols
 
-
-cell_types = {}
-for idx, cell_obj in enumerate(sheet.row(1)):
-    cell_types[idx] = (cell_obj.ctype)
-
-
 signals_sheet = [] # An arrary of all signals filtered for fm_keywords
-signals_sheet_new = [] # An arrary of all signals remaining after flattenging
 llr_signals = {} # A dictionary of rows each signal exists in { signal: [llr_rows]}
 
-# Read spreadsheet and keep rows that have legit FM keywords, capture defines in dictionary llr_signals
+# Read signals spreadsheet and keep rows that have legit FM keywords, capture defines in dictionary llr_signals
 new_row = 0
 header = sheet.row_values(0)
 for row in range(1,nrows):
@@ -82,24 +75,35 @@ for row in range(1,nrows):
             llr_signals[llr_signal] = [new_row]
         new_row += 1
 
-# For every llr_signal, look for pairs.  If one source is Input, combine rows.  Write to new list
-for key in llr_signals:
-    rows = llr_signals[key]
-    row_data = {} # Dictionary for each of the rows being flattened
-    if len(rows) == 2:  # Assumes there will only be two rows to be compressed.
-        for idx, rownum in enumerate(rows):
-            row_data[idx] = signals_sheet[rownum]
-        if row_data[0][2].find('Input') > -1:
-            new_data = row_data[0]          # Target data exists in row_data[0], defined is in row_data[1]
-            new_data[2] = row_data[1][2]
-        else:
-            new_data = row_data[1]          # Target data exists in row_data[1], defined is in row_data[0]
-            new_data[2] = row_data[0][2]
-    elif len(rows) == 1:
-        new_data = signals_sheet[rows[0]] # Target data exists in row_data[0], only row for this signal
+# For every llr_signal, look for multiples.  For those whose defined is Input, combine rows.  Write to new_data
+signals_sheet_new = [] # An arrary of all signals remaining after flattenging
+for signal in llr_signals:
+    row_numbers = llr_signals[signal]
+    if len(row_numbers) == 1:
+        new_data = signals_sheet[row_numbers[0]]  # Target data exists in row_data[0], only row for this signal
     else:
-        print(key, len(rows), "ERROR") # Every signal should exist in only one or two rows.
-    signals_sheet.append(new_data)
+        new_data = []  # New list to hold cell values we will write to a new row
+        used_functions = []  # List to hold the names of all functions that use this signal
+        row_data_list = []  # List to hold spreadsheet data for each of the rows being flattened
+        for row_number in row_numbers: # Store each of the rows to be flattened in this dictionary
+            row_data_list.append(signals_sheet[row_number])
+
+        for row_data in row_data_list:  # Build new combined signal info from each signal based on rules
+            for function in row_data[3].split():
+                used_functions.append(function) # Collect all the functions that use the signal
+            if len(new_data) == 0: # This is first row being processed
+                new_data = row_data
+            else:
+                save_defined = new_data[2] # Preserve previous value of 'defined', even if Input
+                if row_data[2].find('Input') > -1:
+                    new_data = row_data  # If it is an Input row, we want to use it
+                    new_data[2] = save_defined # Restore previous value of 'defined'
+                else:
+                    new_data[2] = row_data[2] # This is not input row so we want to use its 'defined'
+
+        new_data[3] = ' '.join(used_functions) # Build combined list of defined
+
+    signals_sheet_new.append(new_data)
 
 # Write new Excel workbook for signals
 book2 = xlwt.Workbook()
@@ -108,9 +112,42 @@ sheet1 = book2.add_sheet('HAM Signal')
 for col, heading in enumerate(header):
     sheet1.write(0, col, heading)
 
-for row, data in enumerate(signals_sheet):
+for row, data in enumerate(signals_sheet_new):
     for col, cell in enumerate(data):
         sheet1.write(row + 1, col, cell)
 
 book2.save(signal_file_out)
 
+######################################################
+fm_keywords = ['SV Turbo Fan Fuel Cooled']
+
+book = xlrd.open_workbook(params_file)
+sheet = book.sheet_by_name('HAM Parameter')
+nrows = sheet.nrows
+ncols = sheet.ncols
+
+params_sheet = [] # An arrary of all signals filtered for fm_keywords
+params_sheet_new = [] # An arrary of all signals remaining after flattenging
+
+# Read params spreadsheet and keep rows that have legit FM keywords
+
+new_row = 0
+header = sheet.row_values(0)
+for row in range(1,nrows):
+    fm_keyword = sheet.cell(row,1).value
+    if fm_keyword in fm_keywords:
+        params_sheet.append(sheet.row_values(row))
+        new_row += 1
+
+# Write new Excel workbook for parameters
+book2 = xlwt.Workbook()
+sheet1 = book2.add_sheet('HAM Signal')
+
+for col, heading in enumerate(header):
+    sheet1.write(0, col, heading)
+
+for row, data in enumerate(params_sheet):
+    for col, cell in enumerate(data):
+        sheet1.write(row + 1, col, cell)
+
+book2.save(params_file_out)
