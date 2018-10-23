@@ -151,7 +151,7 @@ for param in llr_params:
     if len(row_numbers) == 1:
         new_data = params_sheet[row_numbers[0]]  # Target data exists in row_data[0], only row for this signal
     else:
-        pass
+        pass # Flattening ignored for now because requirements changed
         new_data = []  # New list to hold cell values we will write to a new row
         used_functions = []  # List to hold the names of all functions that use this signal
         row_data_list = []  # List to hold spreadsheet data for each of the rows being flattened
