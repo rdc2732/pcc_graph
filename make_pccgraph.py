@@ -21,7 +21,8 @@ import xlrd
 from xlrd.sheet import ctype_text
 import xlwt
 
-keyword_files = ['Load 5.0 FMM Output Report.txt','Placeholder List.txt']
+keyword_files = ['Placeholder List.txt']
+# keyword_files = ['Load 5.0 FMM Output Report.txt','Placeholder List.txt']
 signal_file = 'master_signals.xls'
 signal_file_out = 'master_signals_out.xls'
 params_file = 'master_params.xls'
